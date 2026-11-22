@@ -17,10 +17,27 @@ export interface StreamChatOptions {
 
 export const chatService = {
   /**
+   * Health check probe to determine if backend is online
+   */
+  async checkHealth(): Promise<boolean> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/health`, {
+        method: "GET",
+        signal: AbortSignal.timeout(3000),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
+
+  /**
    * Fetch available models from backend
    */
   async getModels(): Promise<ModelListResponse> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/models`);
+    const response = await fetch(`${API_BASE_URL}/api/v1/models`, {
+      signal: AbortSignal.timeout(5000),
+    });
     if (!response.ok) {
       throw new Error(`Failed to fetch models: ${response.statusText}`);
     }
@@ -59,10 +76,15 @@ export const chatService = {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(
-          `API error (${response.status}): ${errorText || response.statusText}`
-        );
+        let errorDetail = response.statusText;
+        try {
+          const errJson = await response.json();
+          errorDetail = errJson.detail || errJson.message || errorDetail;
+        } catch {
+          const errText = await response.text();
+          if (errText) errorDetail = errText;
+        }
+        throw new Error(`Server error (${response.status}): ${errorDetail}`);
       }
 
       if (!response.body) {
@@ -79,7 +101,6 @@ export const chatService = {
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
-        // Keep the last partial line in the buffer
         buffer = lines.pop() || "";
 
         for (const line of lines) {
@@ -108,8 +129,15 @@ export const chatService = {
       onDone();
     } catch (err: any) {
       if (err.name === "AbortError") {
-        // Stream aborted by user, call onDone gracefully
         onDone();
+        return;
+      }
+      if (err.message?.includes("Failed to fetch")) {
+        onError(
+          new Error(
+            "Cannot connect to SrajanGPT backend. Please make sure the FastAPI server is running on http://localhost:8000."
+          )
+        );
         return;
       }
       onError(err instanceof Error ? err : new Error(String(err)));

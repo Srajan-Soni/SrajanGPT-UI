@@ -15,11 +15,14 @@ interface ChatState {
   error: string | null;
   abortController: AbortController | null;
   isHistoryOpen: boolean;
+  serverStatus: "connected" | "disconnected" | "checking";
 
   // Actions
   setInputPrompt: (text: string) => void;
   setSelectedModel: (model: string) => void;
   setIsHistoryOpen: (open: boolean) => void;
+  clearError: () => void;
+  checkServerHealth: () => Promise<void>;
   fetchAvailableModels: () => Promise<void>;
   createConversation: (title?: string) => string;
   selectConversation: (id: string | null) => void;
@@ -27,6 +30,7 @@ interface ChatState {
   deleteConversation: (id: string) => void;
   clearAllConversations: () => void;
   sendMessage: (content: string) => Promise<void>;
+  regenerateLastResponse: () => Promise<void>;
   stopStreaming: () => void;
   newChat: () => void;
 }
@@ -43,6 +47,7 @@ export const useChatStore = create<ChatState>()(
       error: null,
       abortController: null,
       isHistoryOpen: false,
+      serverStatus: "checking",
 
       setInputPrompt: (text: string) => set({ inputPrompt: text }),
 
@@ -50,15 +55,24 @@ export const useChatStore = create<ChatState>()(
 
       setIsHistoryOpen: (open: boolean) => set({ isHistoryOpen: open }),
 
+      clearError: () => set({ error: null }),
+
+      checkServerHealth: async () => {
+        const isHealthy = await chatService.checkHealth();
+        set({ serverStatus: isHealthy ? "connected" : "disconnected" });
+      },
+
       fetchAvailableModels: async () => {
         try {
           const res = await chatService.getModels();
           set({
             availableModels: res.models,
             selectedModel: get().selectedModel || res.default_model,
+            serverStatus: "connected",
           });
         } catch (err) {
           console.warn("Failed to load models list from backend:", err);
+          set({ serverStatus: "disconnected" });
         }
       },
 
@@ -206,6 +220,7 @@ export const useChatStore = create<ChatState>()(
             if (chunk.content) {
               accumulatedContent += chunk.content;
               set((state) => ({
+                serverStatus: "connected",
                 conversations: state.conversations.map((c) => {
                   if (c.id === activeId) {
                     return {
@@ -250,6 +265,9 @@ export const useChatStore = create<ChatState>()(
               isStreaming: false,
               abortController: null,
               error: err.message,
+              serverStatus: err.message.includes("Cannot connect")
+                ? "disconnected"
+                : state.serverStatus,
               conversations: state.conversations.map((c) => {
                 if (c.id === activeId) {
                   return {
@@ -272,6 +290,40 @@ export const useChatStore = create<ChatState>()(
             }));
           },
         });
+      },
+
+      regenerateLastResponse: async () => {
+        if (get().isStreaming) return;
+        const activeId = get().activeConversationId;
+        if (!activeId) return;
+
+        const activeConv = get().conversations.find((c) => c.id === activeId);
+        if (!activeConv || activeConv.messages.length === 0) return;
+
+        // Find the last user message
+        const messages = activeConv.messages;
+        let lastUserIndex = -1;
+        for (let i = messages.length - 1; i >= 0; i--) {
+          if (messages[i].role === "user") {
+            lastUserIndex = i;
+            break;
+          }
+        }
+
+        if (lastUserIndex === -1) return;
+        const userPrompt = messages[lastUserIndex].content;
+
+        // Prune any assistant messages after this user message
+        const prunedMessages = messages.slice(0, lastUserIndex);
+
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === activeId ? { ...c, messages: prunedMessages } : c
+          ),
+        }));
+
+        // Re-send user prompt
+        await get().sendMessage(userPrompt);
       },
     }),
     {

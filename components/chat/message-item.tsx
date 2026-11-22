@@ -3,17 +3,22 @@
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Sparkles, Copy, Check, User } from "lucide-react";
+import { Sparkles, Copy, Check, User, RotateCcw } from "lucide-react";
 import type { ChatMessage } from "@/types";
 import { CodeBlock } from "@/components/chat/code-block";
+import { useChatStore } from "@/store/useChatStore";
 
 interface MessageItemProps {
   message: ChatMessage;
+  isLastAssistant?: boolean;
 }
 
-export function MessageItem({ message }: MessageItemProps) {
+export function MessageItem({ message, isLastAssistant }: MessageItemProps) {
   const isUser = message.role === "user";
   const [copied, setCopied] = useState(false);
+  const { regenerateLastResponse, isStreaming } = useChatStore();
+
+  const isErrorMessage = message.content?.startsWith("⚠️ Error:");
 
   async function handleCopy() {
     try {
@@ -32,7 +37,13 @@ export function MessageItem({ message }: MessageItemProps) {
       }`}
     >
       {!isUser && (
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+        <div
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl shadow-sm ${
+            isErrorMessage
+              ? "bg-red-600 text-white"
+              : "bg-primary text-primary-foreground"
+          }`}
+        >
           <Sparkles className="h-4 w-4" aria-hidden="true" />
         </div>
       )}
@@ -41,6 +52,8 @@ export function MessageItem({ message }: MessageItemProps) {
         className={`group relative max-w-[85%] rounded-2xl px-4 py-3 sm:max-w-[78%] ${
           isUser
             ? "bg-primary text-primary-foreground shadow-sm"
+            : isErrorMessage
+            ? "border border-red-200 bg-red-50/90 text-red-900 shadow-card"
             : "glass-panel border border-gray-200/80 bg-white/90 text-gray-900 shadow-card"
         }`}
       >
@@ -121,11 +134,25 @@ export function MessageItem({ message }: MessageItemProps) {
             )}
 
             {!message.isStreaming && message.content && (
-              <div className="mt-2.5 flex items-center justify-end border-t border-gray-100 pt-2 opacity-0 transition-opacity group-hover:opacity-100">
+              <div className="mt-2.5 flex items-center justify-between border-t border-gray-100 pt-2 text-xs text-gray-500">
+                {isLastAssistant && !isStreaming ? (
+                  <button
+                    type="button"
+                    onClick={regenerateLastResponse}
+                    className="flex items-center gap-1 rounded-md px-2 py-1 transition-colors hover:bg-gray-100 hover:text-primary"
+                    aria-label="Regenerate response"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    <span>Regenerate</span>
+                  </button>
+                ) : (
+                  <span />
+                )}
+
                 <button
                   type="button"
                   onClick={handleCopy}
-                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
+                  className="flex items-center gap-1 rounded-md px-2 py-1 transition-colors hover:bg-gray-100 hover:text-gray-900"
                   aria-label="Copy response"
                 >
                   {copied ? (
