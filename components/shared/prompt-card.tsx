@@ -3,6 +3,7 @@
 import { resolveIcon } from "@/components/shared/icon-map";
 import { cn } from "@/lib/utils";
 import type { SuggestedPrompt } from "@/types";
+import { useChatStore } from "@/store/useChatStore";
 
 interface PromptCardProps {
   /** The suggested prompt data to render */
@@ -13,18 +14,19 @@ interface PromptCardProps {
 
 /**
  * PromptCard
- * Client Component — click handling requires it, even though the click
- * doesn't yet populate PromptInput. That wiring needs shared state
- * (Zustand, installed in Step 3) between this card and the Hero's input,
- * which will be introduced when we build functional chat interaction.
- * For now this card is fully accessible and visually complete.
+ * Populates the Hero prompt input with this card's prompt template and focuses it.
  */
 export function PromptCard({ prompt, className }: PromptCardProps) {
   const Icon = resolveIcon(prompt.icon);
+  const { setInputPrompt } = useChatStore();
 
   function handleClick() {
-    // Will populate the Hero PromptInput via shared state once the
-    // functional chat interaction phase begins.
+    setInputPrompt(prompt.prompt);
+    const inputEl = document.getElementById("prompt-input");
+    if (inputEl) {
+      inputEl.focus();
+      inputEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
   }
 
   return (
