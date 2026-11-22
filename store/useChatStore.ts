@@ -14,13 +14,16 @@ interface ChatState {
   availableModels: ModelOption[];
   error: string | null;
   abortController: AbortController | null;
+  isHistoryOpen: boolean;
 
   // Actions
   setInputPrompt: (text: string) => void;
   setSelectedModel: (model: string) => void;
+  setIsHistoryOpen: (open: boolean) => void;
   fetchAvailableModels: () => Promise<void>;
   createConversation: (title?: string) => string;
   selectConversation: (id: string | null) => void;
+  updateConversationTitle: (id: string, newTitle: string) => void;
   deleteConversation: (id: string) => void;
   clearAllConversations: () => void;
   sendMessage: (content: string) => Promise<void>;
@@ -39,10 +42,13 @@ export const useChatStore = create<ChatState>()(
       availableModels: [],
       error: null,
       abortController: null,
+      isHistoryOpen: false,
 
       setInputPrompt: (text: string) => set({ inputPrompt: text }),
 
       setSelectedModel: (model: string) => set({ selectedModel: model }),
+
+      setIsHistoryOpen: (open: boolean) => set({ isHistoryOpen: open }),
 
       fetchAvailableModels: async () => {
         try {
@@ -75,7 +81,17 @@ export const useChatStore = create<ChatState>()(
       },
 
       selectConversation: (id: string | null) => {
-        set({ activeConversationId: id, error: null });
+        set({ activeConversationId: id, error: null, isHistoryOpen: false });
+      },
+
+      updateConversationTitle: (id: string, newTitle: string) => {
+        const trimmed = newTitle.trim();
+        if (!trimmed) return;
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === id ? { ...c, title: trimmed, updatedAt: Date.now() } : c
+          ),
+        }));
       },
 
       deleteConversation: (id: string) => {
@@ -95,11 +111,15 @@ export const useChatStore = create<ChatState>()(
       },
 
       clearAllConversations: () => {
-        set({ conversations: [], activeConversationId: null, error: null });
+        set({
+          conversations: [],
+          activeConversationId: null,
+          error: null,
+          isHistoryOpen: false,
+        });
       },
 
       newChat: () => {
-        // Abort any ongoing stream
         const controller = get().abortController;
         if (controller) controller.abort();
         set({
@@ -107,6 +127,7 @@ export const useChatStore = create<ChatState>()(
           isStreaming: false,
           error: null,
           abortController: null,
+          isHistoryOpen: false,
         });
       },
 
@@ -125,7 +146,6 @@ export const useChatStore = create<ChatState>()(
         let activeId = get().activeConversationId;
         const currentModel = get().selectedModel;
 
-        // Auto-generate conversation title from first prompt
         const titleSnippet =
           trimmed.length > 35 ? `${trimmed.slice(0, 32)}...` : trimmed;
 
@@ -149,7 +169,6 @@ export const useChatStore = create<ChatState>()(
           isStreaming: true,
         };
 
-        // Append user and placeholder messages
         set((state) => ({
           conversations: state.conversations.map((c) => {
             if (c.id === activeId) {
@@ -169,7 +188,6 @@ export const useChatStore = create<ChatState>()(
           inputPrompt: "",
         }));
 
-        // Prepare context messages for API
         const activeConv = get().conversations.find((c) => c.id === activeId);
         const historyForApi = (activeConv ? activeConv.messages : [])
           .filter((m) => m.id !== assistantMessageId)

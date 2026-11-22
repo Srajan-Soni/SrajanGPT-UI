@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { ArrowLeft, Plus, Sparkles, ChevronDown } from "lucide-react";
+import { ArrowLeft, Plus, Sparkles, ChevronDown, History } from "lucide-react";
 import { useChatStore } from "@/store/useChatStore";
 import { MessageItem } from "@/components/chat/message-item";
 import { ChatInput } from "@/components/chat/chat-input";
+import { HistoryDrawer } from "@/components/chat/history-drawer";
 import { Button } from "@/components/ui/button";
 
 export function ChatView() {
@@ -16,6 +17,7 @@ export function ChatView() {
     setSelectedModel,
     availableModels,
     fetchAvailableModels,
+    setIsHistoryOpen,
   } = useChatStore();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -35,9 +37,32 @@ export function ChatView() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] max-w-4xl mx-auto w-full">
+      {/* Slide-out conversation history drawer */}
+      <HistoryDrawer />
+
       {/* Chat Top Action Bar */}
       <div className="flex items-center justify-between border-b border-gray-200/80 px-4 py-3 glass-panel">
         <div className="flex items-center gap-2">
+          {/* History Drawer Trigger */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsHistoryOpen(true)}
+            className="flex items-center gap-1.5 text-gray-700 hover:text-primary hover:bg-accent-50"
+            title="Open conversation history"
+            aria-label="Open conversation history"
+          >
+            <History className="h-4 w-4 text-primary" />
+            <span className="hidden sm:inline text-xs font-medium">History</span>
+            {conversations.length > 0 && (
+              <span className="ml-0.5 rounded-full bg-accent-100 px-1.5 py-0.2 text-[10px] font-semibold text-primary">
+                {conversations.length}
+              </span>
+            )}
+          </Button>
+
+          <span className="text-gray-300">|</span>
+
           <Button
             variant="ghost"
             size="sm"
@@ -46,7 +71,7 @@ export function ChatView() {
             aria-label="Back to home"
           >
             <ArrowLeft className="h-4 w-4" />
-            <span className="hidden sm:inline">Home</span>
+            <span className="hidden sm:inline text-xs font-medium">Home</span>
           </Button>
 
           <span className="text-gray-300">|</span>
