@@ -1,7 +1,8 @@
 import type { ChatMessage, ModelListResponse, StreamChunkPayload } from "@/types";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+).replace(/\/+$/, "");
 
 export interface StreamChatOptions {
   messages: Array<{ role: "user" | "assistant" | "system"; content: string }>;
@@ -23,7 +24,7 @@ export const chatService = {
     try {
       const res = await fetch(`${API_BASE_URL}/api/v1/health`, {
         method: "GET",
-        signal: AbortSignal.timeout(3000),
+        signal: AbortSignal.timeout(12000),
       });
       return res.ok;
     } catch {
@@ -36,7 +37,7 @@ export const chatService = {
    */
   async getModels(): Promise<ModelListResponse> {
     const response = await fetch(`${API_BASE_URL}/api/v1/models`, {
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(12000),
     });
     if (!response.ok) {
       throw new Error(`Failed to fetch models: ${response.statusText}`);
@@ -135,7 +136,7 @@ export const chatService = {
       if (err.message?.includes("Failed to fetch")) {
         onError(
           new Error(
-            "Cannot connect to SrajanGPT backend. Please make sure the FastAPI server is running on http://localhost:8000."
+            `Cannot connect to SrajanGPT backend (${API_BASE_URL}). If using Render free tier, the instance may be spinning up from sleep. Please wait a moment and try again.`
           )
         );
         return;
